@@ -1,12 +1,5 @@
-"""
-Nothing crashes when running
+from ui import App
 
-
-Things to focus: 
-- make UI look nicer
-- make sure that the code is more robust
-- stress test the system with events already in google calendar
-- create a set list of events that could be put in to show the effectiveness of this 
-- make this an executable file
-
-"""
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
