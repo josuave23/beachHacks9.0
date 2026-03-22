@@ -16,12 +16,14 @@ class Schedule():
 
 
     def buildTimeline(self, numDays): #temp default, eventually should make either user inputted or the last deadline
+        now = datetime.now()
         for i in range(numDays):
             dayStart = datetime.combine(date.today() + timedelta(days=i), self.start)
             dayEnd = datetime.combine(date.today() + timedelta(days=i), self.end)
             current = dayStart
             while current < dayEnd:
-                self.timeline.append([current, True, None])
+                if current > now:
+                    self.timeline.append([current, True, None])
                 current += timedelta(minutes=self.slotSize)
 
     def blockRecurringBreaks(self):
