@@ -2,7 +2,7 @@ from datetime import datetime, time, date, timedelta
 import math
 
 class Schedule():
-    def __init__(self, tasks, dayStart, dayEnd, slotSize, urgencyWeight=0.5, impWeight=0.5): #weight values need to be variable in the end
+    def __init__(self, tasks, dayStart, dayEnd, slotSize, urgencyWeight=0.5, impWeight=0.5, blackouts = [], recBreaks = []): #weight values need to be variable in the end
         self.tasks = tasks #list; list of all tasks in this schedule
         self.start = dayStart #time; time that each day will start
         self.end = dayEnd #time; time that each day ends
@@ -11,20 +11,37 @@ class Schedule():
         self.urgencyWeight = urgencyWeight #float; user preference
         self.impWeight = impWeight #float; user preference
         self.unscheduled = []
+        self.blackouts = blackouts #one time breaks manually set
+        self.rb = recBreaks #reccuring breaks
 
-    def buildTimeline(self):
-        current = self.start
-        while current < self.end:
-            self.timeline.append((current, True, None)) #contains the time that each slot is associated with and the task that will be scheduled for this slot
-            dt = datetime.combine(date.today(), current)
-            dtUpdated = dt + timedelta(minutes=self.slotSize)
-            current = dtUpdated.time()
-    
+
+    def buildTimeline(self, numDays): #temp default, eventually should make either user inputted or the last deadline
+        for i in range(numDays):
+            dayStart = datetime.combine(date.today() + timedelta(days=i), self.start)
+            dayEnd = datetime.combine(date.today() + timedelta(days=i), self.end)
+            current = dayStart
+            while current < dayEnd:
+                self.timeline.append([current, True, None])
+                current += timedelta(minutes=self.slotSize)
+
+    def blockRecurringBreaks(self):
+        for slot in self.timeline:
+            for b in self.rb:
+                slotTime = slot[0].time()
+                if slotTime >= b["start"] and slotTime < b["end"]:
+                    slot[1] = False
+
+    def blockBlackouts(self):
+        for slot in self.timeline:
+            for b in self.blackouts:
+                if slot[0] >= b["start"] and slot[0] < b["end"]:
+                    slot[1] = False
+                    
     def blockEvents(self, events):
         for event in events:
-            for slot in self.timeline:
-                if slot[0] >= event.start and slot[0] < event.end:
-                    slot[1] = False
+            for i in range(len(self.timeline)):
+                if self.timeline[i][0] >= event["start"] and self.timeline[i][0] < event["end"]:
+                    self.timeline[i][1] = False
 
     def scoreTasks(self):
         h = []
@@ -38,56 +55,60 @@ class Schedule():
         return h+nh
     
     def findEarliestSlot(self, slotsNeeded):
-        for i in range(len(self.timeline)):
-            if i+slotsNeeded >= len(self.timeline):
-                break
-            for j in range(len(self.timeline[i:i+slotsNeeded])):
-                if self.timeline[j][1] == False:
-                    i = j + 1
-                    break
-                if j == i + slotsNeeded and self.timeline[j][1] == True:
-                    return i
-        return None #Return not enough slots available
+        for i in range(len(self.timeline) - slotsNeeded + 1):
+            if all(self.timeline[j][1] == True for j in range(i, i + slotsNeeded)):
+                return i
+        return None #error that not enought slots
 
     def findLatestSlot(self, slotsNeeded, deadline):
-        deadlineIdx = len(self.timeline)/2
-        while self.timeline[deadlineIdx][0] != deadline:
-            if self.timeline[deadlineIdx][0] > deadline:
-                deadlineIdx = deadlineIdx/2
-            elif self.timeline[deadlineIdx][0] < deadline:
-                toAdd = len(self.timeline[deadlineIdx:])/2
-                deadlineIdx += toAdd
-        for i in range(deadlineIdx - slotsNeeded, 0, -1):
-            if j-slotsNeeded < 0:
+        deadlineIdx = 0
+        for i in range(len(self.timeline)):
+            if self.timeline[i][0] <= deadline:
+                deadlineIdx = i
+            else:
                 break
-            for j in range(slotsNeeded, j-slotsNeeded):
-                if self.timeline[j][1] == False:
-                    i = j - 1
-                    break
-                if j == i - slotsNeeded and self.timeline[j][1] == True:
-                    return i - slotsNeeded
-        return None
+        for i in range(deadlineIdx - slotsNeeded, -1, -1):
+            if all(self.timeline[j][1] == True for j in range(i, i + slotsNeeded)):
+                return i
+        return None #not enought slots
     
     def assignSlot(self, task, startIdx, slotsNeeded):
         for i in range(startIdx, startIdx + slotsNeeded):
             self.timeline[i][1] = False
             self.timeline[i][2] = task
 
-    def genSchedule(self, calendarEvents):
-        self.buildTimeline()
+    def assignSplitTask(self, task, slotsNeeded):
+        remaining = slotsNeeded
+        for i in range(len(self.timeline)):
+            if remaining == 0:
+                break
+            if self.timeline[i][1] == True:
+                self.timeline[i][1] = False
+                self.timeline[i][2] = task
+                remaining -= 1
+        if remaining > 0:
+            self.unscheduled.append(task)
+
+    def genSchedule(self, calendarEvents, numDays=7):
+        self.buildTimeline(numDays)
+        self.blockRecurringBreaks()
+        self.blockBlackouts()
         self.blockEvents(calendarEvents)
         scored = self.scoreTasks()
 
         for task in scored:
             slotsNeeded = math.ceil(task.duration / self.slotSize)
-            if task.deadType == "hard":
+            if task.type == "hard":
                 idx = self.findLatestSlot(slotsNeeded, task.deadline)
+                if idx is not None:
+                    self.assignSlot(task, idx, slotsNeeded)
+                else:
+                    self.assignSplitTask(task, slotsNeeded)
             else:
-                idk = self.findEarliestSlot(slotsNeeded)
-            
-            if idx is not None:
-                self.assignSlot(task, idx, slotsNeeded)
-            else:
-                self.unscheduled.append(task)
+                idx = self.findEarliestSlot(slotsNeeded)
+                if idx is not None:
+                    self.assignSlot(task, idx, slotsNeeded)
+                else:
+                    self.assignSplitTask(task, slotsNeeded)
 
-        return self.timeline, self.unscheduled
+        return self.timeline, self.unscheduled  
