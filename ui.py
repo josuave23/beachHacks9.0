@@ -518,6 +518,3 @@ class App(ctk.CTk):
         ctk.CTkLabel(frame, text=subtitle, font=FONT_BODY,
                      text_color=TEXT_MUTED).pack(pady=8)
 
-
-app = App()
-app.mainloop()
