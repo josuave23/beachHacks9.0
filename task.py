@@ -11,7 +11,7 @@ class Task():
         self.score =1
 
     def findScore(self, urgencyWeight, impWeight): #finds the score that determines this task's priority
-        now = datetime.now().time()
+        now = datetime.now()
         if self.deadline is not None:
             timeLeft = (self.deadline - now).total_seconds() / 3600
             urgency = 1/max(timeLeft, 0.1)
