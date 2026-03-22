@@ -1,10 +1,12 @@
 import customtkinter as ctk
-
+from gcal import getService, getEvents, pushEvents
 
 class App(ctk.CTk):
     def __init__(self, fg_color = None, **kwargs):
         super().__init__(fg_color, **kwargs)
-        
+        self.calService = getService()  
+        self.calEvents  = getEvents(self.calService)
+
         self.tasks = []
         self.timeline = []
         self.unscheduled = []
@@ -46,6 +48,14 @@ class App(ctk.CTk):
 
         self.genButton = ctk.CTkButton(self.topbar, text="Generate Schedule", command=self.generateSchedule)
         self.genButton.pack(side="right", padx=8)
+
+        self.pushBtn = ctk.CTkButton(self.topbar, text="Push to Calendar", command=self.pushToCalendar)
+        self.pushBtn.pack(side="right", padx=8)
+
+    def pushToCalendar(self):
+        if not self.timeline:
+            return
+        pushEvents(self.calService, self.timeline)
 
     def addTaskCard(self, name, duration, importance, deadType, deadline):
         card = ctk.CTkFrame(self.contentFrame)
@@ -128,7 +138,7 @@ class App(ctk.CTk):
             slotSize=30
         )
 
-        self.timeline, self.unscheduled = s.genSchedule([])
+        self.timeline, self.unscheduled = s.genSchedule(self.calEvents)
         self.displaySchedule()
     
     def isFirstSlot(self, slot):
