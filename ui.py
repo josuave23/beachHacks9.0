@@ -49,7 +49,7 @@ class App(ctk.CTk):
         self.genButton = ctk.CTkButton(self.topbar, text="Generate Schedule", command=self.generateSchedule)
         self.genButton.pack(side="right", padx=8)
 
-        self.pushBtn = ctk.CTkButton(self.topbar, text="Push to Calendar", command=self.pushToCalendar)
+        self.pushBtn = ctk.CTkButton(self.topbar, text="Push to Calendar", command=self.pushToCalendar, state="disabled")
         self.pushBtn.pack(side="right", padx=8)
 
     def pushToCalendar(self):
@@ -106,21 +106,48 @@ class App(ctk.CTk):
         deadlineEntry = ctk.CTkEntry(popup, placeholder_text="e.g. 3")
         deadlineEntry.pack(pady=(4, 0), padx=20, fill="x")
 
+
         # confirm button
         def confirm():
             from datetime import datetime, timedelta
-            name       = nameEntry.get()
-            duration   = int(durationEntry.get())
-            importance = int(importanceEntry.get())
-            deadType   = deadTypeMenu.get()
-            daysAway   = deadlineEntry.get()
-            deadline   = datetime.now() + timedelta(days=int(daysAway)) if daysAway else None
-
             from task import Task
-            newTask = Task(name, duration, importance, deadType, deadline=deadline)
+
+            name     = nameEntry.get().strip()
+            duration = durationEntry.get().strip()
+            imp      = importanceEntry.get().strip()
+            deadType = deadTypeMenu.get()
+            daysAway = deadlineEntry.get().strip()
+
+            # validate name
+            if not name:
+                errorLabel.configure(text="Task name cannot be empty.")
+                return
+
+            # validate duration
+            if not duration.isdigit() or int(duration) <= 0:
+                errorLabel.configure(text="Duration must be a positive number.")
+                return
+
+            # validate importance
+            if not imp.isdigit() or not 1 <= int(imp) <= 10:
+                errorLabel.configure(text="Importance must be between 1 and 10.")
+                return
+
+            # validate deadline
+            if deadType != "none" and daysAway and not daysAway.isdigit():
+                errorLabel.configure(text="Deadline must be a number of days.")
+                return
+
+            deadline = datetime.now() + timedelta(days=int(daysAway)) if daysAway else None
+
+            newTask = Task(name, int(duration), int(imp), deadType, deadline=deadline)
             self.tasks.append(newTask)
-            self.addTaskCard(name, duration, importance, deadType, deadline)
+            self.addTaskCard(name, int(duration), int(imp), deadType, deadline)
             popup.destroy()
+
+        #error popup
+        errorLabel = ctk.CTkLabel(popup, text="", text_color="#A32D2D", font=("Arial", 11))
+        errorLabel.pack(pady=(4,0))
 
         ctk.CTkButton(popup, text="Add Task", command=confirm).pack(pady=16)
     
@@ -140,6 +167,7 @@ class App(ctk.CTk):
 
         self.timeline, self.unscheduled = s.genSchedule(self.calEvents)
         self.displaySchedule()
+        self.pushBtn.configure(state="normal")
     
     def isFirstSlot(self, slot):
         idx = self.timeline.index(slot)
@@ -148,30 +176,45 @@ class App(ctk.CTk):
         return self.timeline[idx - 1][2] != slot[2]
 
     def displaySchedule(self):
-        # clear existing content first
         for widget in self.contentFrame.winfo_children():
             widget.destroy()
 
-        # section label
-        ctk.CTkLabel(self.contentFrame, text="GENERATED SCHEDULE", 
+        ctk.CTkLabel(self.contentFrame, text="GENERATED SCHEDULE",
                     font=("Arial", 11), text_color="gray").pack(anchor="w", padx=12, pady=(10, 4))
 
-        # render each occupied slot
+        # show blocked calendar events first
+        if self.calEvents:
+            ctk.CTkLabel(self.contentFrame, text="BLOCKED FROM GOOGLE CALENDAR",
+                        font=("Arial", 11), text_color="gray").pack(anchor="w", padx=12, pady=(10, 4))
+            for event in self.calEvents:
+                timeStr = event["start"].strftime("%I:%M %p") + " → " + event["end"].strftime("%I:%M %p")
+                row = ctk.CTkFrame(self.contentFrame, fg_color="#E6F1FB")
+                row.pack(fill="x", padx=10, pady=2)
+
+                ctk.CTkLabel(row, text=timeStr, width=160,
+                            font=("Arial", 11), text_color="#185FA5").pack(side="left", padx=8)
+                ctk.CTkLabel(row, text=event["title"],
+                            font=("Arial", 13), text_color="#185FA5").pack(side="left", padx=4)
+
+        # show scheduled tasks
+        ctk.CTkLabel(self.contentFrame, text="SCHEDULED TASKS",
+                    font=("Arial", 11), text_color="gray").pack(anchor="w", padx=12, pady=(10, 4))
+
         for slot in self.timeline:
             if slot[2] is not None and self.isFirstSlot(slot):
                 timeStr = slot[0].strftime("%I:%M %p")
                 row = ctk.CTkFrame(self.contentFrame)
                 row.pack(fill="x", padx=10, pady=2)
 
-                ctk.CTkLabel(row, text=timeStr, width=80, 
+                ctk.CTkLabel(row, text=timeStr, width=80,
                             font=("Arial", 11), text_color="gray").pack(side="left", padx=8)
-                ctk.CTkLabel(row, text=slot[2].n, 
+                ctk.CTkLabel(row, text=slot[2].n,
                             font=("Arial", 13)).pack(side="left", padx=4)
 
         # unscheduled warning
         if self.unscheduled:
             names = ", ".join([t.n for t in self.unscheduled])
-            ctk.CTkLabel(self.contentFrame, 
+            ctk.CTkLabel(self.contentFrame,
                         text=f"Could not schedule: {names}",
                         text_color="#A32D2D").pack(anchor="w", padx=12, pady=8)
 
