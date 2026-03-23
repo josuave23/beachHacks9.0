@@ -1,6 +1,7 @@
 # beachHacks9.0
 My submission for BeachHacks 9.0 at CSULB
 
+Note: I will be continuing development in the Timeback-Scheduler repo on my github page, if you are looking for the up-to-date version.
 
 ## Setup
 After download, ensure that main.py, schedule.py. task.py, gcal.py, and ui.py are all in the same folder
